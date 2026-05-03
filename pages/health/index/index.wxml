@@ -30,9 +30,9 @@
           <text class="latest-value" style="color:{{item.color}}">{{moduleData[item.key].latest}}</text>
           <text class="latest-unit">{{item.unit}}</text>
         </block>
-        <text class="tag {{moduleData[item.key].status === 'normal' ? 'tag-green' : (moduleData[item.key].status === 'high' ? 'tag-red' : 'tag-orange')}}">
+        <view class="tag {{moduleData[item.key].status === 'normal' ? 'tag-green' : (moduleData[item.key].status === 'high' ? 'tag-red' : 'tag-orange')}}">
           {{moduleData[item.key].status === 'normal' ? '正常' : (moduleData[item.key].status === 'high' ? '偏高' : (moduleData[item.key].status === 'low' ? '偏低' : ''))}}
-        </text>
+        </view>
       </view>
 
       <!-- 体重额外信息：BMI分类、目标差、N天对比 -->

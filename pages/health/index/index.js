@@ -69,7 +69,17 @@ Page({
     Promise.all(promises).then(results => {
       const moduleData = {}
       results.forEach(r => {
-        moduleData[r.key] = { ...r.stats, status: r.status, count: r.count, ...r }
+        // 格式化 latestTime 为可读日期
+        let latestTimeStr = ''
+        if (r.latestTime) {
+          const d = new Date(r.latestTime)
+          const month = d.getMonth() + 1
+          const day = d.getDate()
+          const hour = String(d.getHours()).padStart(2, '0')
+          const minute = String(d.getMinutes()).padStart(2, '0')
+          latestTimeStr = month + '/' + day + ' ' + hour + ':' + minute
+        }
+        moduleData[r.key] = { ...r.stats, status: r.status, count: r.count, ...r, latestTime: latestTimeStr }
       })
       this.setData({ moduleData, loading: false })
     })

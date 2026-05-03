@@ -52,8 +52,11 @@ page {
 
 /* 标签样式 */
 .tag {
-  display: inline-block;
-  padding: 4rpx 16rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40rpx;
+  padding: 0 16rpx;
   border-radius: 8rpx;
   font-size: 22rpx;
   font-weight: 500;
