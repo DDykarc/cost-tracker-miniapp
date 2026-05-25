@@ -200,6 +200,18 @@ Page({
     return { normal: 'tag-green', high: 'tag-red', low: 'tag-orange' }[status] || ''
   },
 
+  // 点击右下角加号：弹出选择菜单
+  onTapQuickAdd() {
+    wx.showActionSheet({
+      itemList: ['🩸 记录血糖', '💊 记录尿酸', '⚖️ 记录体重'],
+      success: (res) => {
+        const types = ['blood_sugar', 'uric_acid', 'weight']
+        const type = types[res.tapIndex]
+        wx.navigateTo({ url: `/pages/health/record/record?type=${type}` })
+      }
+    })
+  },
+
   // 阻止事件冒泡
   onActionTap() {
     // 什么都不做，只是阻止冒泡
