@@ -1,0 +1,107 @@
+<!-- 消费报告页面 -->
+<view class="page">
+
+  <!-- 模式切换 -->
+  <view class="mode-switch">
+    <view class="mode-tab {{mode === 'month' ? 'active' : ''}}" data-mode="month" bindtap="onSwitchMode">月报</view>
+    <view class="mode-tab {{mode === 'year' ? 'active' : ''}}" data-mode="year" bindtap="onSwitchMode">年报</view>
+  </view>
+
+  <!-- 时间选择器 -->
+  <view class="period-nav">
+    <view class="nav-arrow" bindtap="onPrev">‹</view>
+    <view class="period-text">
+      <text wx:if="{{mode === 'month'}}">{{currentYear}}年{{currentMonth}}月</text>
+      <text wx:else>{{currentYear}}年</text>
+    </view>
+    <view class="nav-arrow" bindtap="onNext">›</view>
+  </view>
+
+  <!-- 无数据状态 -->
+  <view class="empty-state" wx:if="{{!hasData}}">
+    <text class="empty-icon-text">📊</text>
+    <text class="empty-title">该时段暂无消费记录</text>
+    <text class="empty-desc">换个时间段看看</text>
+  </view>
+
+  <!-- 有数据 -->
+  <block wx:if="{{hasData}}">
+
+    <!-- 概览统计 -->
+    <view class="summary-card">
+      <view class="summary-item">
+        <text class="summary-num">¥{{totalSpent}}</text>
+        <text class="summary-label">总花费</text>
+      </view>
+      <view class="summary-divider"></view>
+      <view class="summary-item">
+        <text class="summary-num">{{itemCount}}</text>
+        <text class="summary-label">件物品</text>
+      </view>
+      <view class="summary-divider"></view>
+      <view class="summary-item">
+        <text class="summary-num">¥{{avgPerItem}}</text>
+        <text class="summary-label">均价</text>
+      </view>
+    </view>
+
+    <!-- 图表 -->
+    <view class="chart-card card">
+      <view class="card-title-text" wx:if="{{mode === 'month'}}">分类占比</view>
+      <view class="card-title-text" wx:else>月度趋势</view>
+      <canvas type="2d" id="reportChart" class="report-canvas"></canvas>
+    </view>
+
+    <!-- 分类明细（月报模式） -->
+    <view class="detail-card card" wx:if="{{mode === 'month' && categoryData.length > 0}}">
+      <view class="card-title-text">分类明细</view>
+      <view class="cat-list">
+        <view class="cat-row" wx:for="{{categoryData}}" wx:key="name">
+          <view class="cat-left">
+            <view class="cat-dot" style="background:{{item.color}}"></view>
+            <text class="cat-icon">{{item.icon}}</text>
+            <text class="cat-name">{{item.name}}</text>
+          </view>
+          <view class="cat-right">
+            <text class="cat-amount">¥{{item.amount}}</text>
+            <text class="cat-percent">{{item.percent}}%</text>
+          </view>
+          <view class="cat-bar-bg">
+            <view class="cat-bar-fill" style="width:{{item.percent}}%; background:{{item.color}}"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 年度月对比明细 -->
+    <view class="detail-card card" wx:if="{{mode === 'year' && monthTrend.length > 0}}">
+      <view class="card-title-text">月度明细</view>
+      <view class="month-list">
+        <view class="month-row" wx:for="{{monthTrend}}" wx:key="label">
+          <text class="month-label">{{item.label}}</text>
+          <view class="month-bar-bg">
+            <view class="month-bar-fill" style="width:{{item.amount > 0 ? (item.amount / totalSpent * 100) : 0}}%"></view>
+          </view>
+          <text class="month-amount">¥{{item.amount}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- Top 5 -->
+    <view class="detail-card card" wx:if="{{topItems.length > 0}}">
+      <view class="card-title-text">花费最多</view>
+      <view class="top-list">
+        <view class="top-row" wx:for="{{topItems}}" wx:key="name">
+          <view class="top-rank">{{index + 1}}</view>
+          <view class="top-info">
+            <text class="top-name">{{item.name}}</text>
+            <text class="top-cat">{{item.category}}</text>
+          </view>
+          <text class="top-price">¥{{item.price}}</text>
+        </view>
+      </view>
+    </view>
+
+  </block>
+
+</view>

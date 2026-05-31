@@ -1,4 +1,4 @@
-<!-- 首页 - 商品列表 -->
+﻿<!-- 首页 - 商品列表 -->
 <view class="page">
 
   <!-- 顶部统计 -->
@@ -57,10 +57,25 @@
     <text class="trend-arrow">›</text>
   </view>
 
+  <!-- 消费报告入口 -->
+  <view class="trend-card report-card" wx:if="{{items.length > 0}}" bindtap="onViewReport">
+    <view class="trend-left">
+      <text class="trend-icon">📋</text>
+      <view class="trend-info">
+        <text class="trend-title">消费报告</text>
+        <text class="trend-desc">月度/年度消费分析</text>
+      </view>
+    </view>
+    <text class="trend-arrow">›</text>
+  </view>
+
   <!-- 商品列表 -->
   <scroll-view class="list-scroll" scroll-y wx:if="{{filteredItems.length > 0}}" enhanced show-scrollbar="{{false}}">
     <view class="list">
       <view class="list-item card" wx:for="{{filteredItems}}" wx:key="_id">
+        <!-- 左侧图片 -->
+        <image wx:if="{{item.imageUrl}}" class="item-thumb" src="{{item.imageUrl}}" mode="aspectFill" bindtap="onEditItem" data-id="{{item._id}}" />
+
         <!-- 左侧信息 -->
         <view class="item-left" bindtap="onEditItem" data-id="{{item._id}}">
           <view class="item-name">{{item.name}}</view>

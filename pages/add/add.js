@@ -23,6 +23,9 @@ Page({
     buyDate: '',
     category: '',
     note: '',
+    imageUrl: '',
+    imageFileID: '',
+    imageChanged: false,
 
     categories: CATEGORIES,
 
@@ -55,7 +58,9 @@ Page({
             price: String(item.price),
             buyDate: item.buyDate,
             category: item.category || '',
-            note: item.note || ''
+            note: item.note || '',
+            imageUrl: item.imageUrl || '',
+            imageFileID: item.imageFileID || ''
           })
           this.updatePreview()
           this.checkCanSave()
@@ -89,6 +94,52 @@ Page({
 
   onNoteInput(e) {
     this.setData({ note: e.detail.value })
+  },
+
+  // 选择图片
+  onChooseImage() {
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      sizeType: ['compressed'],
+      success: (res) => {
+        const tempPath = res.tempFiles[0].tempFilePath
+        // 压缩图片到 60% 质量
+        wx.compressImage({
+          src: tempPath,
+          quality: 60,
+          success: (compressed) => {
+            this.setData({
+              imageUrl: compressed.tempFilePath,
+              imageChanged: true
+            })
+          },
+          fail: () => {
+            this.setData({
+              imageUrl: tempPath,
+              imageChanged: true
+            })
+          }
+        })
+      }
+    })
+  },
+
+  // 预览图片
+  onPreviewImage() {
+    if (this.data.imageUrl) {
+      wx.previewImage({ urls: [this.data.imageUrl] })
+    }
+  },
+
+  // 移除图片
+  onRemoveImage() {
+    this.setData({
+      imageUrl: '',
+      imageFileID: '',
+      imageChanged: true
+    })
   },
 
   checkCanSave() {
@@ -132,30 +183,56 @@ Page({
       note: note.trim()
     }
 
-    if (isEdit) {
-      // 更新到云端
-      db.updateItem(editId, itemData).then(success => {
-        this.setData({ saving: false })
-        if (success) {
-          wx.showToast({ title: '已更新', icon: 'success', duration: 1500 })
-          setTimeout(() => wx.navigateBack(), 1500)
-        } else {
+    // 实际保存逻辑
+    const doSave = (imageUrl, imageFileID) => {
+      if (imageUrl) itemData.imageUrl = imageUrl
+      if (imageFileID) itemData.imageFileID = imageFileID
+
+      if (isEdit) {
+        // 图片被移除时清理字段
+        if (!this.data.imageUrl && !this.data.imageFileID) {
+          itemData.imageUrl = ''
+          itemData.imageFileID = ''
+        }
+        db.updateItem(editId, itemData).then(success => {
           this.setData({ saving: false })
+          if (success) {
+            wx.showToast({ title: '已更新', icon: 'success', duration: 1500 })
+            setTimeout(() => wx.navigateBack(), 1500)
+          }
+        })
+      } else {
+        itemData.createdAt = new Date().toISOString()
+        db.addItem(itemData).then(newId => {
+          this.setData({ saving: false })
+          if (newId) {
+            wx.showToast({ title: '已添加', icon: 'success', duration: 1500 })
+            setTimeout(() => wx.navigateBack(), 1500)
+          }
+        })
+      }
+    }
+
+    // 需要上传新图片
+    if (this.data.imageUrl && this.data.imageChanged && !this.data.imageUrl.startsWith('cloud://')) {
+      wx.showLoading({ title: '上传图片中...' })
+      const cloudPath = 'item_images/' + Date.now() + '.jpg'
+      wx.cloud.uploadFile({
+        cloudPath,
+        filePath: this.data.imageUrl,
+        success: (res) => {
+          wx.hideLoading()
+          doSave(this.data.imageUrl, res.fileID)
+        },
+        fail: (err) => {
+          wx.hideLoading()
+          console.error('图片上传失败', err)
+          wx.showToast({ title: '图片上传失败，仅保存文字', icon: 'none' })
+          doSave('', '')
         }
       })
     } else {
-      // 新增到云端
-      itemData.createdAt = new Date().toISOString()
-
-      db.addItem(itemData).then(newId => {
-        this.setData({ saving: false })
-        if (newId) {
-          wx.showToast({ title: '已添加', icon: 'success', duration: 1500 })
-          setTimeout(() => wx.navigateBack(), 1500)
-        } else {
-          this.setData({ saving: false })
-        }
-      })
+      doSave(this.data.imageUrl, this.data.imageFileID)
     }
   },
 

@@ -4,6 +4,83 @@
   background: #F5F6FA;
 }
 
+/* 时间范围筛选栏 */
+.filter-bar {
+  display: flex;
+  gap: 16rpx;
+  padding: 16rpx 0 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.filter-tab {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #666;
+  background: #FFFFFF;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.04);
+}
+
+.filter-tab.active {
+  background: linear-gradient(135deg, #00C853, #69F0AE);
+  color: #FFFFFF;
+  box-shadow: 0 4rpx 12rpx rgba(0, 200, 83, 0.25);
+}
+
+/* 统计摘要卡片 */
+.stats-card {
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stats-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.stats-high {
+  color: #D32F2F;
+}
+
+.stats-low {
+  color: #388E3C;
+}
+
+.stats-avg {
+  color: #1976D2;
+}
+
+.stats-label {
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 4rpx;
+}
+
+.stats-divider {
+  width: 2rpx;
+  height: 40rpx;
+  background: #F0F0F0;
+}
+
 .record-list {
   margin-bottom: 40rpx;
 }

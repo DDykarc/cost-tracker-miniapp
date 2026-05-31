@@ -1,4 +1,4 @@
-<!-- 添加/编辑商品页面 -->
+﻿<!-- 添加/编辑商品页面 -->
 <view class="page">
 
   <view class="form-card card">
@@ -45,6 +45,21 @@
     <view class="form-group">
       <text class="form-label">备注（选填）</text>
       <input class="input-field" type="text" placeholder="例如：二手、官方翻新" value="{{note}}" bindinput="onNoteInput" maxlength="50" />
+    </view>
+
+    <!-- 图片（选填） -->
+    <view class="form-group">
+      <text class="form-label">图片（选填）</text>
+      <view class="image-area">
+        <view class="image-preview" wx:if="{{imageUrl}}">
+          <image class="preview-img" src="{{imageUrl}}" mode="aspectFill" bindtap="onPreviewImage" />
+          <view class="image-remove" catchtap="onRemoveImage">✕</view>
+        </view>
+        <view class="image-add" wx:else bindtap="onChooseImage">
+          <text class="image-add-icon">📷</text>
+          <text class="image-add-text">添加照片</text>
+        </view>
+      </view>
     </view>
 
     <!-- 预览信息 -->

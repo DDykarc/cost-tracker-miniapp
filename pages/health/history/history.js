@@ -1,13 +1,25 @@
 const healthDb = require('../../../utils/healthDb')
 
+const TIME_RANGES = [
+  { key: '7', label: '近7天' },
+  { key: '30', label: '近30天' },
+  { key: '90', label: '近90天' },
+  { key: 'all', label: '全部' }
+]
+
 Page({
   data: {
     type: '',
     typeName: '',
     unit: '',
     records: [],
+    filteredRecords: [],
     loading: true,
-    settings: {}
+    settings: {},
+    timeRanges: TIME_RANGES,
+    selectedRange: '30',
+    // 统计数据
+    stats: { max: null, min: null, avg: null, count: 0 }
   },
 
   onLoad(options) {
@@ -31,12 +43,9 @@ Page({
     const { type, settings } = this.data
     this.setData({ loading: true })
     healthDb.getRecords(type).then(records => {
-      // 按时间倒序
       records.sort((a, b) => b.recordTime - a.recordTime)
 
-      // 为每个记录计算状态和格式化时间
       const enrichedRecords = records.map(r => {
-        // 计算状态
         let status = 'unknown'
         if (type === 'blood_sugar') {
           status = healthDb.getStatus(type, r.value, { timing: r.timing })
@@ -44,7 +53,6 @@ Page({
           status = healthDb.getStatus(type, r.value, { gender: settings.gender || 'male' })
         }
 
-        // 格式化时间
         const d = new Date(r.recordTime)
         const month = d.getMonth() + 1
         const day = d.getDate()
@@ -52,15 +60,42 @@ Page({
         const minute = String(d.getMinutes()).padStart(2, '0')
         const timeStr = month + '/' + day + ' ' + hour + ':' + minute
 
-        return {
-          ...r,
-          status,
-          timeStr
-        }
+        return { ...r, status, timeStr }
       })
 
       this.setData({ records: enrichedRecords, loading: false })
+      this.applyFilter()
     })
+  },
+
+  // 时间范围切换
+  onSwitchRange(e) {
+    const range = e.currentTarget.dataset.range
+    this.setData({ selectedRange: range })
+    this.applyFilter()
+  },
+
+  // 应用时间筛选
+  applyFilter() {
+    const { records, selectedRange } = this.data
+    let filtered = records
+
+    if (selectedRange !== 'all') {
+      const days = parseInt(selectedRange)
+      const since = Date.now() - days * 24 * 60 * 60 * 1000
+      filtered = records.filter(r => r.recordTime >= since)
+    }
+
+    // 计算筛选后的统计
+    let stats = { max: null, min: null, avg: null, count: filtered.length }
+    if (filtered.length > 0) {
+      const values = filtered.map(r => r.value)
+      stats.max = Math.max(...values)
+      stats.min = Math.min(...values)
+      stats.avg = (values.reduce((s, v) => s + v, 0) / values.length).toFixed(1)
+    }
+
+    this.setData({ filteredRecords: filtered, stats })
   },
 
   onTapRecord(e) {

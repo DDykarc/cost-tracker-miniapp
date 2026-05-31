@@ -1,4 +1,4 @@
-const app = getApp()
+﻿const app = getApp()
 const db = require('../../utils/db')
 
 // 预设分类（名称 + 图标）
@@ -135,6 +135,10 @@ Page({
   onViewChart(e) {
     const id = e.currentTarget.dataset.id
     wx.navigateTo({ url: `/pages/chart/chart?id=${id}` })
+  },
+
+  onViewReport() {
+    wx.navigateTo({ url: "/pages/report/report" })
   },
 
   onViewAllChart() {

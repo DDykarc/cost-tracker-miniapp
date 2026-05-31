@@ -1,7 +1,43 @@
 <view class="page">
+  <!-- 时间范围筛选 -->
+  <view class="filter-bar">
+    <view
+      class="filter-tab {{selectedRange === item.key ? 'active' : ''}}"
+      wx:for="{{timeRanges}}"
+      wx:key="key"
+      data-range="{{item.key}}"
+      bindtap="onSwitchRange"
+    >{{item.label}}</view>
+  </view>
+
+  <!-- 统计摘要 -->
+  <view class="stats-card" wx:if="{{stats.count > 0}}">
+    <view class="stats-row">
+      <view class="stats-item">
+        <text class="stats-value">{{stats.count}}</text>
+        <text class="stats-label">记录</text>
+      </view>
+      <view class="stats-divider"></view>
+      <view class="stats-item">
+        <text class="stats-value stats-high">{{stats.max}}</text>
+        <text class="stats-label">最高</text>
+      </view>
+      <view class="stats-divider"></view>
+      <view class="stats-item">
+        <text class="stats-value stats-low">{{stats.min}}</text>
+        <text class="stats-label">最低</text>
+      </view>
+      <view class="stats-divider"></view>
+      <view class="stats-item">
+        <text class="stats-value stats-avg">{{stats.avg}}</text>
+        <text class="stats-label">平均</text>
+      </view>
+    </view>
+  </view>
+
   <!-- 记录列表 -->
   <view class="record-list">
-    <view class="record-item" wx:for="{{records}}" wx:key="_id">
+    <view class="record-item" wx:for="{{filteredRecords}}" wx:key="_id">
       <view class="record-main" data-id="{{item._id}}" bindtap="onTapRecord">
         <view class="record-left">
           <text class="record-value">{{item.value}}</text>
@@ -28,8 +64,8 @@
   </view>
 
   <!-- 空状态 -->
-  <view class="empty" wx:if="{{!loading && records.length === 0}}">
-    <text class="empty-text">暂无记录</text>
+  <view class="empty" wx:if="{{!loading && filteredRecords.length === 0}}">
+    <text class="empty-text">该时段暂无记录</text>
   </view>
 
   <!-- 加载状态 -->

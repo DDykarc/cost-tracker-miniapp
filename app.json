@@ -3,6 +3,7 @@
     "pages/index/index",
     "pages/add/add",
     "pages/chart/chart",
+    "pages/report/report",
     "pages/health/index/index",
     "pages/health/record/record",
     "pages/health/history/history",
