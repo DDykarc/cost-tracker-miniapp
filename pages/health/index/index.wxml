@@ -7,79 +7,84 @@
     </view>
   </view>
 
+  <!-- 加载失败 -->
+  <error-state wx:if="{{error}}" message="{{error.message}}" retryable="{{error.retryable}}" bind:retry="loadAllData" />
+
   <!-- 模块卡片列表 -->
-  <view class="card" wx:for="{{modules}}" wx:key="key" data-key="{{item.key}}" bindtap="onTapCard">
-    <view class="card-header">
-      <view class="card-title">
-        <text class="card-icon">{{item.icon}}</text>
-        <text class="card-name">{{item.name}}</text>
-        <text class="card-unit">({{item.unit}})</text>
-      </view>
-      <text class="card-count">{{moduleData[item.key].count || 0}}条记录</text>
-    </view>
-
-    <!-- 最新数据 -->
-    <view class="card-latest" wx:if="{{moduleData[item.key].latest !== null}}">
-      <view class="latest-value-wrap">
-        <!-- 体重显示格式：xx KG / BMI -->
-        <block wx:if="{{item.key === 'weight' && moduleData[item.key].bmi}}">
-          <text class="latest-value" style="color:{{item.color}}">{{moduleData[item.key].latest}} {{item.unit}}</text>
-          <text class="latest-unit">/ BMI {{moduleData[item.key].bmi}}</text>
-        </block>
-        <block wx:else>
-          <text class="latest-value" style="color:{{item.color}}">{{moduleData[item.key].latest}}</text>
-          <text class="latest-unit">{{item.unit}}</text>
-        </block>
-        <!-- 体重显示BMI分类标签，其他类型显示状态标签 -->
-        <block wx:if="{{item.key === 'weight' && moduleData[item.key].bmiText}}">
-          <view class="tag weight-bmi-tag">{{moduleData[item.key].bmiText}}</view>
-        </block>
-        <block wx:else>
-          <view class="tag {{moduleData[item.key].status === 'normal' ? 'tag-green' : (moduleData[item.key].status === 'high' ? 'tag-red' : 'tag-orange')}}">
-            {{moduleData[item.key].status === 'normal' ? '正常' : (moduleData[item.key].status === 'high' ? '偏高' : (moduleData[item.key].status === 'low' ? '偏低' : ''))}}
-          </view>
-        </block>
+  <block wx:if="{{!error}}">
+    <view class="card" wx:for="{{modules}}" wx:key="key" data-key="{{item.key}}" bindtap="onTapCard">
+      <view class="card-header">
+        <view class="card-title">
+          <text class="card-icon">{{item.icon}}</text>
+          <text class="card-name">{{item.name}}</text>
+          <text class="card-unit">({{item.unit}})</text>
+        </view>
+        <text class="card-count">{{moduleData[item.key].count || 0}}条记录</text>
       </view>
 
-      <!-- 体重额外信息：BMI提示 / 目标差、N天对比 -->
-      <view wx:if="{{item.key === 'weight'}}" class="weight-info">
-        <text wx:if="{{!moduleData[item.key].bmi && moduleData[item.key].latest !== null}}" class="bmi-tag" catchtap="onTapSettings">请设置身高以计算BMI</text>
-        <text wx:if="{{moduleData[item.key].targetDiff !== undefined && moduleData[item.key].targetDiff !== null}}" class="target-tag {{moduleData[item.key].targetDiff > 0 ? 'over' : 'under'}}">
-          {{moduleData[item.key].targetDiff > 0 ? '超目标' : '距目标'}} {{moduleData[item.key].targetDiff}} kg
-        </text>
-        <text wx:if="{{moduleData[item.key].compareDiff !== undefined && moduleData[item.key].compareDiff !== null}}" class="compare-tag {{moduleData[item.key].compareDiff > 0 ? 'up' : 'down'}}">
-          较{{moduleData[item.key].compareDays}}天前 {{moduleData[item.key].compareDiff > 0 ? '↑' : '↓'}} {{moduleData[item.key].compareDiff}} kg
-        </text>
+      <!-- 最新数据 -->
+      <view class="card-latest" wx:if="{{moduleData[item.key].latest !== null}}">
+        <view class="latest-value-wrap">
+          <!-- 体重显示格式：xx KG / BMI -->
+          <block wx:if="{{item.key === 'weight' && moduleData[item.key].bmi}}">
+            <text class="latest-value" style="color:{{item.color}}">{{moduleData[item.key].latest}} {{item.unit}}</text>
+            <text class="latest-unit">/ BMI {{moduleData[item.key].bmi}}</text>
+          </block>
+          <block wx:else>
+            <text class="latest-value" style="color:{{item.color}}">{{moduleData[item.key].latest}}</text>
+            <text class="latest-unit">{{item.unit}}</text>
+          </block>
+          <!-- 体重显示BMI分类标签，其他类型显示状态标签 -->
+          <block wx:if="{{item.key === 'weight' && moduleData[item.key].bmiText}}">
+            <view class="tag weight-bmi-tag">{{moduleData[item.key].bmiText}}</view>
+          </block>
+          <block wx:else>
+            <view class="tag {{moduleData[item.key].status === 'normal' ? 'tag-green' : (moduleData[item.key].status === 'high' ? 'tag-red' : 'tag-orange')}}">
+              {{moduleData[item.key].status === 'normal' ? '正常' : (moduleData[item.key].status === 'high' ? '偏高' : (moduleData[item.key].status === 'low' ? '偏低' : ''))}}
+            </view>
+          </block>
+        </view>
+
+        <!-- 体重额外信息：BMI提示 / 目标差、N天对比 -->
+        <view wx:if="{{item.key === 'weight'}}" class="weight-info">
+          <text wx:if="{{!moduleData[item.key].bmi && moduleData[item.key].latest !== null}}" class="bmi-tag" catchtap="onTapSettings">请设置身高以计算BMI</text>
+          <text wx:if="{{moduleData[item.key].targetDiff !== undefined && moduleData[item.key].targetDiff !== null}}" class="target-tag {{moduleData[item.key].targetDiff > 0 ? 'over' : 'under'}}">
+            {{moduleData[item.key].targetDiff > 0 ? '超目标' : '距目标'}} {{moduleData[item.key].targetDiff}} kg
+          </text>
+          <text wx:if="{{moduleData[item.key].compareDiff !== undefined && moduleData[item.key].compareDiff !== null}}" class="compare-tag {{moduleData[item.key].compareDiff > 0 ? 'up' : 'down'}}">
+            较{{moduleData[item.key].compareDays}}天前 {{moduleData[item.key].compareDiff > 0 ? '↑' : '↓'}} {{moduleData[item.key].compareDiff}} kg
+          </text>
+        </view>
+
+        <text class="latest-time" wx:if="{{moduleData[item.key].latestTime}}">{{moduleData[item.key].latestTime}}</text>
+      </view>
+      <view class="card-empty" wx:else>
+        <text class="empty-text">暂无记录</text>
       </view>
 
-      <text class="latest-time" wx:if="{{moduleData[item.key].latestTime}}">{{moduleData[item.key].latestTime}}</text>
-    </view>
-    <view class="card-empty" wx:else>
-      <text class="empty-text">暂无记录</text>
-    </view>
+      <!-- 统计数据 -->
+      <view class="card-stats" wx:if="{{moduleData[item.key].max !== null}}">
+        <view class="stat-item">
+          <text class="stat-label">最高</text>
+          <text class="stat-value">{{moduleData[item.key].max}}</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">最低</text>
+          <text class="stat-value">{{moduleData[item.key].min}}</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">平均</text>
+          <text class="stat-value">{{moduleData[item.key].avg}}</text>
+        </view>
+      </view>
 
-    <!-- 统计数据 -->
-    <view class="card-stats" wx:if="{{moduleData[item.key].max !== null}}">
-      <view class="stat-item">
-        <text class="stat-label">最高</text>
-        <text class="stat-value">{{moduleData[item.key].max}}</text>
-      </view>
-      <view class="stat-item">
-        <text class="stat-label">最低</text>
-        <text class="stat-value">{{moduleData[item.key].min}}</text>
-      </view>
-      <view class="stat-item">
-        <text class="stat-label">平均</text>
-        <text class="stat-value">{{moduleData[item.key].avg}}</text>
+      <!-- 操作按钮 -->
+      <view class="card-actions" catchtap="onActionTap">
+        <text class="action-link" data-key="{{item.key}}" catchtap="onTapRecord">记录</text>
+        <text class="action-link" data-key="{{item.key}}" catchtap="onTapChart">图表</text>
       </view>
     </view>
-
-    <!-- 操作按钮 -->
-    <view class="card-actions" catchtap="onActionTap">
-      <text class="action-link" data-key="{{item.key}}" catchtap="onTapRecord">记录</text>
-      <text class="action-link" data-key="{{item.key}}" catchtap="onTapChart">图表</text>
-    </view>
-  </view>
+  </block>
 
   <!-- 加载状态 -->
   <view class="loading-wrap" wx:if="{{loading}}">

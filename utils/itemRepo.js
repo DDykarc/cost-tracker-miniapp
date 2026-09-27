@@ -10,6 +10,23 @@ const { COLLECTIONS } = require('./config')
 const { getCollection, fetchAll, toFriendlyError, friendlyError } = require('./cloud')
 
 /**
+ * 规范化图片地址。
+ *
+ * 历史数据里 imageUrl 存的是 wxfile:// 临时路径（小程序重启即失效），
+ * 真正的云存储地址在 imageFileID 里。这里统一把 imageUrl 换成可长期渲染的
+ * cloud:// 地址，页面就不必再关心字段来源。
+ *
+ * @param {Object} item
+ * @returns {Object}
+ */
+function normalizeItem(item) {
+  if (!item) return item
+  const candidates = [item.imageUrl, item.imageFileID]
+  const usable = candidates.find(v => v && String(v).indexOf('cloud://') === 0) || ''
+  return Object.assign({}, item, { imageUrl: usable })
+}
+
+/**
  * 拉取全部物品（自动分页，最多 1000 条），按创建时间倒序
  * @returns {Promise<Array>}
  */
@@ -18,7 +35,8 @@ async function getAllItems() {
     const query = getCollection(COLLECTIONS.ITEMS)
       .orderBy('createdAt', 'desc')
       .orderBy('_id', 'desc')
-    return await fetchAll(query)
+    const list = await fetchAll(query)
+    return list.map(normalizeItem)
   } catch (err) {
     throw toFriendlyError(err, '读取物品失败')
   }
@@ -32,7 +50,7 @@ async function getAllItems() {
 async function getItem(id) {
   try {
     const res = await getCollection(COLLECTIONS.ITEMS).doc(id).get()
-    return res.data || null
+    return res.data ? normalizeItem(res.data) : null
   } catch (err) {
     throw toFriendlyError(err, '读取物品失败')
   }
@@ -95,6 +113,7 @@ async function deleteItem(id) {
 }
 
 module.exports = {
+  normalizeItem,
   getAllItems,
   getItem,
   addItem,

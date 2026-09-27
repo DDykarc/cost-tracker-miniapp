@@ -210,16 +210,6 @@
   white-space: nowrap;
 }
 
-.empty {
-  text-align: center;
-  padding: 100rpx 0;
-}
-
-.empty-text {
-  font-size: 28rpx;
-  color: #999;
-}
-
 .loading {
   text-align: center;
   padding: 60rpx 0;

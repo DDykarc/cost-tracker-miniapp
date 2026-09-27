@@ -1,21 +1,11 @@
-const db = require('../../utils/db')
+const { CATEGORIES, CHART_COLORS } = require('../../utils/config')
+const { buildYAxis, roundRectPath, fitText } = require('../../utils/chart')
+const itemRepo = require('../../utils/itemRepo')
 
-const CATEGORIES = [
-  { name: '电子设备', icon: '📱' },
-  { name: '家居生活', icon: '🏠' },
-  { name: '服装鞋包', icon: '👕' },
-  { name: '租房住房', icon: '🏢' },
-  { name: '技能培训', icon: '📚' },
-  { name: '交通出行', icon: '🚗' },
-  { name: '餐饮美食', icon: '🍜' },
-  { name: '娱乐休闲', icon: '🎮' },
-  { name: '其他', icon: '📦' }
-]
-
-const COLORS = [
-  '#00C853', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7',
-  '#FF8A65', '#45B7D1', '#F06292', '#90A4AE'
-]
+/** 图例每行高度（px） */
+const LEGEND_ROW_H = 38
+/** 图例列宽（px） */
+const LEGEND_W = 150
 
 Page({
   data: {
@@ -26,10 +16,13 @@ Page({
     itemCount: 0,
     avgPerItem: '0',
     categoryData: [], // { name, icon, amount, percent, color }
-    monthTrend: [],   // { label, amount } (仅年报模式)
+    monthTrend: [],   // { label, amount }（仅年报模式）
     topItems: [],     // { name, price, category }
     hasData: false,
-    allItems: []
+    chartHeightPx: 200,
+    allItems: [],
+    loading: true,
+    error: null
   },
 
   onLoad() {
@@ -41,41 +34,44 @@ Page({
     this.loadAllData()
   },
 
-  loadAllData() {
-    wx.showLoading({ title: '加载中...' })
-    db.getAllItems().then(items => {
-      wx.hideLoading()
-      this.setData({ allItems: items })
+  async loadAllData() {
+    this.setData({ loading: true, error: null })
+    try {
+      const items = await itemRepo.getAllItems()
+      this.setData({ allItems: items, loading: false })
       this.calcReport()
-    })
+    } catch (err) {
+      this.setData({ loading: false, error: { message: err.message, retryable: err.retryable } })
+    }
   },
 
-  // 切换月报/年报
   onSwitchMode(e) {
-    const mode = e.currentTarget.dataset.mode
-    this.setData({ mode }, () => this.calcReport())
+    this.setData({ mode: e.currentTarget.dataset.mode }, () => this.calcReport())
   },
 
-  // 切换上一月/年
   onPrev() {
     let { currentYear, currentMonth, mode } = this.data
     if (mode === 'month') {
       currentMonth--
-      if (currentMonth < 1) { currentMonth = 12; currentYear-- }
+      if (currentMonth < 1) {
+        currentMonth = 12
+        currentYear--
+      }
     } else {
       currentYear--
     }
     this.setData({ currentYear, currentMonth }, () => this.calcReport())
   },
 
-  // 切换下一月/年
   onNext() {
     let { currentYear, currentMonth, mode } = this.data
     const now = new Date()
     if (mode === 'month') {
       currentMonth++
-      if (currentMonth > 12) { currentMonth = 1; currentYear++ }
-      // 不超过当前月
+      if (currentMonth > 12) {
+        currentMonth = 1
+        currentYear++
+      }
       if (currentYear > now.getFullYear() ||
         (currentYear === now.getFullYear() && currentMonth > now.getMonth() + 1)) {
         return
@@ -87,7 +83,7 @@ Page({
     this.setData({ currentYear, currentMonth }, () => this.calcReport())
   },
 
-  // 计算报告数据
+  /** 按当前模式与时间段计算报表数据 */
   calcReport() {
     const { allItems, mode, currentYear, currentMonth } = this.data
     if (!allItems.length) {
@@ -95,239 +91,241 @@ Page({
       return
     }
 
-    // 筛选当前时间段内购买的物品
-    let filtered = allItems.filter(item => {
+    const filtered = allItems.filter(item => {
       const d = new Date(item.buyDate)
       if (mode === 'month') {
         return d.getFullYear() === currentYear && (d.getMonth() + 1) === currentMonth
-      } else {
-        return d.getFullYear() === currentYear
       }
+      return d.getFullYear() === currentYear
     })
 
     if (filtered.length === 0) {
-      this.setData({ hasData: false, categoryData: [], monthTrend: [], topItems: [], itemCount: 0, totalSpent: '0', avgPerItem: '0' })
+      this.setData({
+        hasData: false,
+        categoryData: [],
+        monthTrend: [],
+        topItems: [],
+        itemCount: 0,
+        totalSpent: '0',
+        avgPerItem: '0'
+      })
       return
     }
 
-    // 总花费
-    const total = filtered.reduce((s, i) => s + i.price, 0)
-    const avgPerItem = (total / filtered.length).toFixed(0)
+    const total = filtered.reduce((s, i) => s + (parseFloat(i.price) || 0), 0)
 
-    // 按分类统计
+    // 按分类汇总
     const catMap = {}
     filtered.forEach(item => {
       const cat = item.category || '其他'
-      catMap[cat] = (catMap[cat] || 0) + item.price
+      catMap[cat] = (catMap[cat] || 0) + (parseFloat(item.price) || 0)
     })
-    const categoryData = Object.entries(catMap)
-      .map(([name, amount], idx) => {
+    const categoryData = Object.keys(catMap)
+      .map((name, idx) => {
         const catInfo = CATEGORIES.find(c => c.name === name)
+        const amount = catMap[name]
         return {
           name,
           icon: catInfo ? catInfo.icon : '📦',
           amount: amount.toFixed(0),
-          percent: Math.round(amount / total * 100),
-          color: COLORS[idx % COLORS.length]
+          percent: total > 0 ? Math.round((amount / total) * 100) : 0,
+          color: CHART_COLORS[idx % CHART_COLORS.length]
         }
       })
       .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))
 
-    // 年报模式：月度趋势
+    // 年报模式：逐月趋势
     let monthTrend = []
     if (mode === 'year') {
       for (let m = 1; m <= 12; m++) {
-        const monthItems = allItems.filter(item => {
-          const d = new Date(item.buyDate)
-          return d.getFullYear() === currentYear && (d.getMonth() + 1) === m
-        })
-        const monthTotal = monthItems.reduce((s, i) => s + i.price, 0)
+        const monthTotal = allItems
+          .filter(item => {
+            const d = new Date(item.buyDate)
+            return d.getFullYear() === currentYear && (d.getMonth() + 1) === m
+          })
+          .reduce((s, i) => s + (parseFloat(i.price) || 0), 0)
         monthTrend.push({ label: m + '月', amount: monthTotal.toFixed(0) })
       }
     }
 
-    // 花费最多的物品 Top 5
     const topItems = [...filtered]
-      .sort((a, b) => b.price - a.price)
+      .sort((a, b) => (parseFloat(b.price) || 0) - (parseFloat(a.price) || 0))
       .slice(0, 5)
       .map(item => ({
         name: item.name,
-        price: item.price.toFixed(0),
+        price: (parseFloat(item.price) || 0).toFixed(0),
         category: item.category || '其他'
       }))
+
+    // 画布高度跟着图例条数走，否则分类一多图例就被裁掉
+    const chartHeightPx = mode === 'month'
+      ? Math.max(200, categoryData.length * LEGEND_ROW_H + 24)
+      : 200
 
     this.setData({
       hasData: true,
       totalSpent: total.toFixed(0),
       itemCount: filtered.length,
-      avgPerItem,
+      avgPerItem: (total / filtered.length).toFixed(0),
       categoryData,
       monthTrend,
-      topItems
-    })
-
-    // 延迟绘制图表
-    setTimeout(() => this.drawChart(), 100)
+      topItems,
+      chartHeightPx
+    }, () => this.drawChart())
   },
 
-  // Canvas 绘制分类占比图
   drawChart() {
     const { mode, categoryData, monthTrend } = this.data
     if (mode === 'month' && categoryData.length > 0) {
-      this.drawPieChart()
+      this.initCanvas((ctx, w, h) => this.drawPieChart(ctx, w, h))
     } else if (mode === 'year' && monthTrend.length > 0) {
-      this.drawBarChart()
+      this.initCanvas((ctx, w, h) => this.drawBarChart(ctx, w, h))
     }
   },
 
-  drawPieChart() {
+  /**
+   * 取 canvas 节点并处理 dpr。
+   * 节点还没渲染出来时重试一次 —— 原来直接 return，低端机上会出现「有数据但图表空白」。
+   */
+  initCanvas(callback, retry = true) {
     wx.createSelectorQuery()
       .select('#reportChart')
       .fields({ node: true, size: true })
       .exec(res => {
-        if (!res?.[0]?.node) return
-        const canvas = res[0].node
+        const info = res && res[0]
+        if (!info || !info.node) {
+          if (retry) setTimeout(() => this.initCanvas(callback, false), 200)
+          return
+        }
+        const canvas = info.node
         const ctx = canvas.getContext('2d')
-        const dpr = wx.getSystemInfoSync().pixelRatio
-        canvas.width = res[0].width * dpr
-        canvas.height = res[0].height * dpr
+        const dpr = wx.getWindowInfo().pixelRatio
+        canvas.width = info.width * dpr
+        canvas.height = info.height * dpr
         ctx.scale(dpr, dpr)
-        const w = res[0].width
-        const h = res[0].height
-
-        const { categoryData } = this.data
-        const cx = w * 0.35
-        const cy = h / 2
-        const radius = Math.min(cx, cy) - 10
-        const total = categoryData.reduce((s, c) => s + parseFloat(c.amount), 0)
-
-        let startAngle = -Math.PI / 2
-        categoryData.forEach(cat => {
-          const sliceAngle = (parseFloat(cat.amount) / total) * Math.PI * 2
-          ctx.beginPath()
-          ctx.moveTo(cx, cy)
-          ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle)
-          ctx.closePath()
-          ctx.fillStyle = cat.color
-          ctx.fill()
-          startAngle += sliceAngle
-        })
-
-        // 中心白色圆（甜甜圈效果）
-        ctx.beginPath()
-        ctx.arc(cx, cy, radius * 0.55, 0, Math.PI * 2)
-        ctx.fillStyle = '#FFFFFF'
-        ctx.fill()
-
-        // 中心文字
-        ctx.fillStyle = '#333'
-        ctx.font = 'bold 16px sans-serif'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(`¥${this.data.totalSpent}`, cx, cy - 8)
-        ctx.fillStyle = '#999'
-        ctx.font = '11px sans-serif'
-        ctx.fillText('总花费', cx, cy + 12)
-
-        // 右侧图例
-        const legendX = w * 0.65
-        let legendY = 15
-        categoryData.forEach(cat => {
-          ctx.fillStyle = cat.color
-          ctx.fillRect(legendX, legendY, 12, 12)
-          ctx.fillStyle = '#333'
-          ctx.font = '12px sans-serif'
-          ctx.textAlign = 'left'
-          ctx.textBaseline = 'top'
-          ctx.fillText(`${cat.icon} ${cat.name}`, legendX + 18, legendY)
-          ctx.fillStyle = '#999'
-          ctx.font = '11px sans-serif'
-          ctx.fillText(`¥${cat.amount} (${cat.percent}%)`, legendX + 18, legendY + 16)
-          legendY += 38
-        })
+        callback(ctx, info.width, info.height)
       })
   },
 
-  drawBarChart() {
-    wx.createSelectorQuery()
-      .select('#reportChart')
-      .fields({ node: true, size: true })
-      .exec(res => {
-        if (!res?.[0]?.node) return
-        const canvas = res[0].node
-        const ctx = canvas.getContext('2d')
-        const dpr = wx.getSystemInfoSync().pixelRatio
-        canvas.width = res[0].width * dpr
-        canvas.height = res[0].height * dpr
-        ctx.scale(dpr, dpr)
-        const w = res[0].width
-        const h = res[0].height
+  /** 月报：分类占比环形图 + 右侧图例 */
+  drawPieChart(ctx, width, height) {
+    const { categoryData, totalSpent } = this.data
+    ctx.clearRect(0, 0, width, height)
 
-        const { monthTrend } = this.data
-        const margin = { top: 20, right: 20, bottom: 40, left: 50 }
-        const chartW = w - margin.left - margin.right
-        const chartH = h - margin.top - margin.bottom
+    const legendX = width - LEGEND_W + 4
+    const pieAreaW = width - LEGEND_W
+    const cx = pieAreaW / 2
+    const cy = height / 2
+    const radius = Math.max(30, Math.min(cx - 12, cy - 12, 88))
 
-        const maxVal = Math.max(...monthTrend.map(m => parseFloat(m.amount)), 1)
-        const yMax = Math.ceil(maxVal / 100) * 100 || 100
-        const barW = Math.min(40, (chartW - (monthTrend.length - 1) * 8) / monthTrend.length)
-        const gap = barW + 8
+    const total = categoryData.reduce((s, c) => s + parseFloat(c.amount), 0) || 1
 
-        // 网格线
-        ctx.strokeStyle = '#F0F0F0'
-        ctx.lineWidth = 1
-        for (let y = 0; y <= yMax; y += Math.ceil(yMax / 4 / 100) * 100) {
-          const py = margin.top + chartH - (y / yMax) * chartH
-          ctx.beginPath()
-          ctx.moveTo(margin.left, py)
-          ctx.lineTo(w - margin.right, py)
-          ctx.stroke()
-          ctx.fillStyle = '#999'
-          ctx.font = '10px sans-serif'
-          ctx.textAlign = 'right'
-          ctx.textBaseline = 'middle'
-          ctx.fillText(`${y}`, margin.left - 8, py)
-        }
+    let startAngle = -Math.PI / 2
+    categoryData.forEach(cat => {
+      const sliceAngle = (parseFloat(cat.amount) / total) * Math.PI * 2
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle)
+      ctx.closePath()
+      ctx.fillStyle = cat.color
+      ctx.fill()
+      startAngle += sliceAngle
+    })
 
-        // 柱子
-        monthTrend.forEach((m, i) => {
-          const x = margin.left + i * gap + (chartW - monthTrend.length * gap) / 2
-          const val = parseFloat(m.amount)
-          const barH = val > 0 ? (val / yMax) * chartH : 0
-          const y = margin.top + chartH - barH
+    // 中心留白，形成环形
+    ctx.beginPath()
+    ctx.arc(cx, cy, radius * 0.55, 0, Math.PI * 2)
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fill()
 
-          const grad = ctx.createLinearGradient(x, y, x, margin.top + chartH)
-          grad.addColorStop(0, '#00C853')
-          grad.addColorStop(1, '#69F0AE')
-          ctx.fillStyle = grad
+    ctx.fillStyle = '#333'
+    ctx.font = 'bold 16px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(`¥${totalSpent}`, cx, cy - 8)
+    ctx.fillStyle = '#999'
+    ctx.font = '11px sans-serif'
+    ctx.fillText('总花费', cx, cy + 12)
 
-          const rx = 4
-          ctx.beginPath()
-          ctx.moveTo(x + rx, y)
-          ctx.lineTo(x + barW - rx, y)
-          ctx.quadraticCurveTo(x + barW, y, x + barW, y + rx)
-          ctx.lineTo(x + barW, margin.top + chartH)
-          ctx.lineTo(x, margin.top + chartH)
-          ctx.lineTo(x, y + rx)
-          ctx.quadraticCurveTo(x, y, x + rx, y)
-          ctx.fill()
+    // 图例
+    let legendY = 12
+    categoryData.forEach(cat => {
+      ctx.fillStyle = cat.color
+      ctx.fillRect(legendX, legendY + 3, 10, 10)
 
-          // 数值
-          if (val > 0) {
-            ctx.fillStyle = '#333'
-            ctx.font = '10px sans-serif'
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'bottom'
-            ctx.fillText(`¥${m.amount}`, x + barW / 2, y - 4)
-          }
+      ctx.fillStyle = '#333'
+      ctx.font = '12px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(fitText(ctx, `${cat.icon} ${cat.name}`, LEGEND_W - 24), legendX + 16, legendY)
 
-          // X轴标签
-          ctx.fillStyle = '#999'
-          ctx.font = '10px sans-serif'
+      ctx.fillStyle = '#999'
+      ctx.font = '11px sans-serif'
+      ctx.fillText(`¥${cat.amount} (${cat.percent}%)`, legendX + 16, legendY + 16)
+
+      legendY += LEGEND_ROW_H
+    })
+  },
+
+  /** 年报：月度柱状图 */
+  drawBarChart(ctx, width, height) {
+    const { monthTrend } = this.data
+    const margin = { top: 24, right: 16, bottom: 34, left: 46 }
+    const chartW = width - margin.left - margin.right
+    const chartH = height - margin.top - margin.bottom
+    ctx.clearRect(0, 0, width, height)
+
+    const maxVal = monthTrend.reduce((m, i) => Math.max(m, parseFloat(i.amount) || 0), 1)
+    const axis = buildYAxis(maxVal)
+
+    // 网格线与 Y 轴刻度
+    axis.ticks.forEach(v => {
+      const py = margin.top + chartH - (v / axis.yMax) * chartH
+      ctx.strokeStyle = '#F0F0F0'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(margin.left, py)
+      ctx.lineTo(width - margin.right, py)
+      ctx.stroke()
+
+      ctx.fillStyle = '#999'
+      ctx.font = '10px sans-serif'
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('¥' + v, margin.left - 6, py)
+    })
+
+    const slotW = chartW / monthTrend.length
+    const barW = Math.min(28, slotW * 0.6)
+
+    monthTrend.forEach((m, i) => {
+      const x = margin.left + i * slotW + (slotW - barW) / 2
+      const val = parseFloat(m.amount) || 0
+      const barH = (val / axis.yMax) * chartH
+      const y = margin.top + chartH - barH
+
+      if (barH > 0.5) {
+        const grad = ctx.createLinearGradient(x, y, x, margin.top + chartH)
+        grad.addColorStop(0, '#00C853')
+        grad.addColorStop(1, '#69F0AE')
+        ctx.fillStyle = grad
+        roundRectPath(ctx, x, y, barW, barH, Math.min(4, barW / 2))
+        ctx.fill()
+
+        if (val > 0) {
+          ctx.fillStyle = '#333'
+          ctx.font = '9px sans-serif'
           ctx.textAlign = 'center'
-          ctx.textBaseline = 'top'
-          ctx.fillText(m.label, x + barW / 2, margin.top + chartH + 8)
-        })
-      })
+          ctx.textBaseline = 'bottom'
+          ctx.fillText(String(val), x + barW / 2, y - 3)
+        }
+      }
+
+      ctx.fillStyle = '#999'
+      ctx.font = '10px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+      ctx.fillText(m.label, x + barW / 2, margin.top + chartH + 6)
+    })
   }
 })

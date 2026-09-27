@@ -1,0 +1,7 @@
+<view class="empty-state {{compact ? 'is-compact' : ''}}">
+  <view class="empty-icon" wx:if="{{icon}}">
+    <text class="empty-icon-text">{{icon}}</text>
+  </view>
+  <text class="empty-title">{{title}}</text>
+  <text class="empty-desc" wx:if="{{desc}}">{{desc}}</text>
+</view>

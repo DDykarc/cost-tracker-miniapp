@@ -1,0 +1,46 @@
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 160rpx 40rpx 40rpx;
+}
+
+.error-icon {
+  width: 160rpx;
+  height: 160rpx;
+  background: #FFFFFF;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
+}
+
+.error-icon-text {
+  font-size: 72rpx;
+}
+
+.error-title {
+  font-size: 28rpx;
+  color: #666;
+  margin-top: 32rpx;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.error-retry {
+  margin-top: 40rpx;
+  padding: 0 56rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 36rpx;
+  background: #FFFFFF;
+  color: #00C853;
+  font-size: 28rpx;
+  font-weight: 600;
+  border: 2rpx solid #00C853;
+}
+
+.error-retry:active {
+  opacity: 0.7;
+}

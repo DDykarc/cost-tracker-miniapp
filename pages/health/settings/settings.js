@@ -1,4 +1,5 @@
-const healthDb = require('../../../utils/healthDb')
+const { calcBMI, getBMICategory } = require('../../../utils/calc')
+const healthRepo = require('../../../utils/healthRepo')
 
 Page({
   data: {
@@ -18,15 +19,13 @@ Page({
   },
 
   onLoad() {
-    const settings = healthDb.getSettings()
+    const settings = healthRepo.getSettings()
     this.setData({
       height: settings.height ? String(settings.height) : '',
       targetWeight: settings.targetWeight ? String(settings.targetWeight) : '',
       compareDays: settings.compareDays || 1,
       gender: settings.gender || 'male'
-    }, () => {
-      this.calcBMI()
-    })
+    }, () => this.calcBMI())
   },
 
   onSelectGender(e) {
@@ -34,30 +33,25 @@ Page({
   },
 
   onInputHeight(e) {
-    this.setData({ height: e.detail.value }, () => {
-      this.calcBMI()
-    })
+    this.setData({ height: e.detail.value }, () => this.calcBMI())
   },
 
   onInputTargetWeight(e) {
-    this.setData({ targetWeight: e.detail.value }, () => {
-      this.calcBMI()
-    })
+    this.setData({ targetWeight: e.detail.value }, () => this.calcBMI())
   },
 
   onSelectCompareDays(e) {
-    this.setData({ compareDays: parseInt(e.currentTarget.dataset.value) })
+    this.setData({ compareDays: parseInt(e.currentTarget.dataset.value, 10) })
   },
 
   onSave() {
     const { height, targetWeight, compareDays, gender } = this.data
-    const settings = {
+    healthRepo.saveSettings({
       height: parseFloat(height) || null,
       targetWeight: parseFloat(targetWeight) || null,
       compareDays,
       gender
-    }
-    healthDb.saveSettings(settings)
+    })
     wx.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => wx.navigateBack(), 800)
   },
@@ -66,7 +60,7 @@ Page({
     wx.navigateTo({ url: '/pages/about/about' })
   },
 
-  // 计算BMI并更新显示
+  /** 用「身高 + 目标体重」估算 BMI，给用户一个参照 */
   calcBMI() {
     const h = parseFloat(this.data.height)
     const w = parseFloat(this.data.targetWeight)
@@ -74,9 +68,9 @@ Page({
       this.setData({ bmi: null, bmiCategory: '', bmiCategoryClass: '' })
       return
     }
-    const bmi = healthDb.calcBMI(w, h)
-    const category = healthDb.getBMICategory(bmi)
+    const bmi = calcBMI(w, h)
+    const category = getBMICategory(bmi)
     const categoryClass = category === '正常' ? 'normal' : (category === '偏瘦' ? 'low' : 'high')
-    this.setData({ bmi, bmiCategory: category, bmiCategoryClass })
+    this.setData({ bmi, bmiCategory: category, bmiCategoryClass: categoryClass })
   }
 })

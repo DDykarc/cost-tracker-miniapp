@@ -1,4 +1,7 @@
 <view class="page">
+  <!-- 加载失败 -->
+  <error-state wx:if="{{error}}" message="{{error.message}}" retryable="{{error.retryable}}" bind:retry="loadData" />
+
   <!-- 周期切换 -->
   <view class="period-bar">
     <view class="period-item {{period === item.key ? 'active' : ''}}" wx:for="{{periods}}" wx:key="key" data-key="{{item.key}}" bindtap="onSelectPeriod">{{item.label}}</view>
@@ -41,16 +44,12 @@
     </view>
   </view>
 
-  <!-- 参考范围 -->
-  <view class="ref-card" wx:if="{{type === 'blood_sugar' || type === 'uric_acid'}}">
+  <!-- 参考范围（数值来自 utils/config.js，与状态判定共用同一份数据） -->
+  <view class="ref-card" wx:if="{{refText}}">
     <text class="ref-title">参考范围</text>
-    <view class="ref-item" wx:if="{{type === 'blood_sugar'}}">
-      <text class="ref-label">空腹血糖</text>
-      <text class="ref-value">3.9 ~ 6.1 mmol/L</text>
-    </view>
-    <view class="ref-item" wx:if="{{type === 'uric_acid'}}">
-      <text class="ref-label">尿酸（男性）</text>
-      <text class="ref-value">208 ~ 428 μmol/L</text>
+    <view class="ref-item">
+      <text class="ref-label">{{refLabel}}</text>
+      <text class="ref-value">{{refText}}</text>
     </view>
   </view>
 </view>

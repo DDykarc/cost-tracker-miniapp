@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "趋势图表",
-  "usingComponents": {}
+  "usingComponents": {
+    "error-state": "/components/error-state/index"
+  }
 }

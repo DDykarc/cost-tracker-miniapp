@@ -1,5 +1,7 @@
 {
-  "usingComponents": {},
+  "usingComponents": {
+    "error-state": "/components/error-state/index"
+  },
   "navigationBarTitleText": "成本趋势",
   "backgroundColor": "#FFFFFF"
 }

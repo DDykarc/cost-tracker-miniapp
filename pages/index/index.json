@@ -1,5 +1,8 @@
 {
-  "usingComponents": {},
+  "usingComponents": {
+    "empty-state": "/components/empty-state/index",
+    "error-state": "/components/error-state/index"
+  },
   "navigationBarTitleText": "回本清单",
   "enablePullDownRefresh": true,
   "backgroundColor": "#F5F6FA"

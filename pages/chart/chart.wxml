@@ -1,8 +1,11 @@
 <!-- 折线图/柱状图页面 -->
 <view class="page">
 
+  <!-- 加载失败 -->
+  <error-state wx:if="{{error}}" message="{{error.message}}" retryable="{{error.retryable}}" bind:retry="loadData" />
+
   <!-- ===== 全部物品模式 ===== -->
-  <block wx:if="{{isAllMode}}">
+  <block wx:if="{{!error && isAllMode}}">
     <!-- 统计头部 -->
     <view class="all-header card">
       <view class="all-header-top">
@@ -27,9 +30,11 @@
       </view>
     </view>
 
-    <!-- 柱状图 -->
+    <!-- 柱状图（高度随物品数量增长，超出时在内部滚动） -->
     <view class="chart-wrapper card">
-      <canvas type="2d" id="costChart" class="chart-canvas"></canvas>
+      <scroll-view scroll-y class="chart-scroll">
+        <canvas type="2d" id="costChart" class="chart-canvas" style="height: {{chartHeightPx}}px"></canvas>
+      </scroll-view>
     </view>
 
     <!-- 排名表 -->
@@ -53,7 +58,7 @@
   </block>
 
   <!-- ===== 单个物品模式 ===== -->
-  <block wx:else>
+  <block wx:if="{{!error && !isAllMode}}">
     <view class="item-header card">
       <view class="item-info">
         <view class="item-name">{{item.name}}</view>

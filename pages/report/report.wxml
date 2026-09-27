@@ -17,12 +17,11 @@
     <view class="nav-arrow" bindtap="onNext">›</view>
   </view>
 
+  <!-- 加载失败 -->
+  <error-state wx:if="{{error}}" message="{{error.message}}" retryable="{{error.retryable}}" bind:retry="loadAllData" />
+
   <!-- 无数据状态 -->
-  <view class="empty-state" wx:if="{{!hasData}}">
-    <text class="empty-icon-text">📊</text>
-    <text class="empty-title">该时段暂无消费记录</text>
-    <text class="empty-desc">换个时间段看看</text>
-  </view>
+  <empty-state wx:if="{{!error && !hasData}}" icon="📊" title="该时段暂无消费记录" desc="换个时间段看看" />
 
   <!-- 有数据 -->
   <block wx:if="{{hasData}}">
@@ -49,7 +48,7 @@
     <view class="chart-card card">
       <view class="card-title-text" wx:if="{{mode === 'month'}}">分类占比</view>
       <view class="card-title-text" wx:else>月度趋势</view>
-      <canvas type="2d" id="reportChart" class="report-canvas"></canvas>
+      <canvas type="2d" id="reportChart" class="report-canvas" style="height: {{chartHeightPx}}px"></canvas>
     </view>
 
     <!-- 分类明细（月报模式） -->

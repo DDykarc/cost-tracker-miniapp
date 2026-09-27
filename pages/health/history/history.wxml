@@ -10,6 +10,9 @@
     >{{item.label}}</view>
   </view>
 
+  <!-- 加载失败 -->
+  <error-state wx:if="{{error}}" message="{{error.message}}" retryable="{{error.retryable}}" bind:retry="loadData" />
+
   <!-- 统计摘要 -->
   <view class="stats-card" wx:if="{{stats.count > 0}}">
     <view class="stats-row">
@@ -36,7 +39,7 @@
   </view>
 
   <!-- 记录列表 -->
-  <view class="record-list">
+  <view class="record-list" wx:if="{{!error}}">
     <view class="record-item" wx:for="{{filteredRecords}}" wx:key="_id">
       <view class="record-main" data-id="{{item._id}}" bindtap="onTapRecord">
         <view class="record-left">
@@ -64,9 +67,7 @@
   </view>
 
   <!-- 空状态 -->
-  <view class="empty" wx:if="{{!loading && filteredRecords.length === 0}}">
-    <text class="empty-text">该时段暂无记录</text>
-  </view>
+  <empty-state wx:if="{{!loading && !error && filteredRecords.length === 0}}" icon="📋" title="该时段暂无记录" compact />
 
   <!-- 加载状态 -->
   <view class="loading" wx:if="{{loading}}">

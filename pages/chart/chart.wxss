@@ -104,6 +104,12 @@
   height: 500rpx;
 }
 
+/* 全部对比模式：画布高度随物品数量增长，超出时在容器内滚动 */
+.chart-scroll {
+  width: 100%;
+  height: 500rpx;
+}
+
 /* 数据表 */
 .data-table {
   margin-top: 16rpx;

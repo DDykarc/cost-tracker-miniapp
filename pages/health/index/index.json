@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "健康记录"
+  "navigationBarTitleText": "健康记录",
+  "usingComponents": {
+    "error-state": "/components/error-state/index"
+  }
 }

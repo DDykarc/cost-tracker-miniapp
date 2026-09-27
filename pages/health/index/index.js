@@ -1,14 +1,27 @@
-const healthDb = require('../../../utils/healthDb')
+const { HEALTH_TYPES, HEALTH_TYPE_META } = require('../../../utils/config')
+const { calcStats, getStatus, calcBMI, getBMICategory, sortByTimeDesc } = require('../../../utils/calc')
+const { formatShortDateTime } = require('../../../utils/format')
+const healthRepo = require('../../../utils/healthRepo')
+
+/** 三个健康模块的展示配置 */
+const MODULES = [
+  Object.assign({ key: HEALTH_TYPES.BLOOD_SUGAR }, HEALTH_TYPE_META.blood_sugar),
+  Object.assign({ key: HEALTH_TYPES.URIC_ACID }, HEALTH_TYPE_META.uric_acid),
+  Object.assign({ key: HEALTH_TYPES.WEIGHT }, HEALTH_TYPE_META.weight)
+]
+
+/** CSV 字段转义：换行会破坏行结构，逗号会和分隔符冲突 */
+function escapeCSV(value) {
+  const text = value === undefined || value === null ? '' : String(value)
+  return text.replace(/\r?\n/g, ' ').replace(/,/g, '，')
+}
 
 Page({
   data: {
-    modules: [
-      { key: 'blood_sugar', name: '血糖', icon: '🩸', unit: 'mmol/L', color: '#FF6B6B' },
-      { key: 'uric_acid',   name: '尿酸', icon: '💊', unit: 'μmol/L', color: '#4ECDC4' },
-      { key: 'weight',      name: '体重', icon: '⚖️', unit: 'kg',     color: '#45B7D1' }
-    ],
-    moduleData: {},  // { blood_sugar: { latest, max, min, avg, status } }
+    modules: MODULES,
+    moduleData: {},
     loading: true,
+    error: null,
     settings: {}
   },
 
@@ -16,143 +29,138 @@ Page({
     this.loadAllData()
   },
 
-  loadAllData() {
-    this.setData({ loading: true })
-    const settings = healthDb.getSettings()
+  onPullDownRefresh() {
+    this.loadAllData().finally(() => wx.stopPullDownRefresh())
+  },
+
+  async loadAllData() {
+    this.setData({ loading: true, error: null })
+    const settings = healthRepo.getSettings()
     this.setData({ settings })
 
-    const promises = this.data.modules.map(m => {
-      return healthDb.getRecords(m.key).then(records => {
-        // 确保按recordTime倒序排列（云数据库返回的数据可能顺序不对）
-        records.sort((a, b) => b.recordTime - a.recordTime)
-        const stats = healthDb.calcStats(records)
-        // 根据类型传入不同参数判断状态
-        let status = 'unknown'
-        if (stats.latest !== null) {
-          if (m.key === 'blood_sugar') {
-            // 最新记录的timing（records已按时间倒序）
-            const latestRecord = records[0]
-            status = healthDb.getStatus(m.key, stats.latest, { timing: latestRecord.timing })
-          } else if (m.key === 'uric_acid') {
-            status = healthDb.getStatus(m.key, stats.latest, { gender: settings.gender || 'male' })
-          }
-        }
-
-        const result = { key: m.key, stats, status, count: records.length }
-
-        // 体重额外计算BMI、N天对比、目标差
-        if (m.key === 'weight' && stats.latest !== null) {
-          // BMI
-          if (settings.height) {
-            result.bmi = healthDb.calcBMI(stats.latest, settings.height)
-            result.bmiCategory = result.bmi ? healthDb.getBMICategory(result.bmi) : ''
-            result.bmiText = result.bmi ? ('BMI ' + result.bmi + ' ' + result.bmiCategory) : ''
-          }
-          // 目标体重差
-          if (settings.targetWeight) {
-            result.targetDiff = Math.round((stats.latest - settings.targetWeight) * 10) / 10
-          }
-          // N天对比
-          if (settings.compareDays && records.length > 1) {
-            const compareDate = new Date()
-            compareDate.setDate(compareDate.getDate() - settings.compareDays)
-            const compareRecord = records.find(r => r.recordTime <= compareDate.getTime())
-            if (compareRecord) {
-              result.compareDiff = Math.round((stats.latest - compareRecord.value) * 10) / 10
-              result.compareDays = settings.compareDays
-            }
-          }
-        }
-
-        return result
-      })
-    })
-    Promise.all(promises).then(results => {
+    try {
+      const results = await Promise.all(MODULES.map(m => this.loadModule(m, settings)))
       const moduleData = {}
-      results.forEach(r => {
-        // 格式化 latestTime 为可读日期
-        let latestTimeStr = ''
-        if (r.latestTime) {
-          const d = new Date(r.latestTime)
-          const month = d.getMonth() + 1
-          const day = d.getDate()
-          const hour = String(d.getHours()).padStart(2, '0')
-          const minute = String(d.getMinutes()).padStart(2, '0')
-          latestTimeStr = month + '/' + day + ' ' + hour + ':' + minute
-        }
-        moduleData[r.key] = { ...r.stats, status: r.status, count: r.count, ...r, latestTime: latestTimeStr }
-      })
+      results.forEach(r => { moduleData[r.key] = r })
       this.setData({ moduleData, loading: false })
+    } catch (err) {
+      this.setData({ loading: false, error: { message: err.message, retryable: err.retryable } })
+    }
+  },
+
+  /**
+   * 加载单个模块的数据与统计
+   * @param {Object} module
+   * @param {Object} settings
+   */
+  async loadModule(module, settings) {
+    const records = await healthRepo.getRecords(module.key)
+    const sorted = sortByTimeDesc(records)
+    const stats = calcStats(sorted)
+
+    let status = 'unknown'
+    if (stats.latest !== null) {
+      if (module.key === HEALTH_TYPES.BLOOD_SUGAR) {
+        // 按最新那条记录自己的测量时机来判定
+        status = getStatus(module.key, stats.latest, { timing: sorted[0].timing })
+      } else if (module.key === HEALTH_TYPES.URIC_ACID) {
+        status = getStatus(module.key, stats.latest, { gender: settings.gender })
+      }
+    }
+
+    const result = Object.assign({ key: module.key }, stats, {
+      status,
+      latestTime: stats.latestTime ? formatShortDateTime(stats.latestTime) : ''
     })
+
+    if (module.key === HEALTH_TYPES.WEIGHT && stats.latest !== null) {
+      if (settings.height) {
+        result.bmi = calcBMI(stats.latest, settings.height)
+        result.bmiCategory = getBMICategory(result.bmi)
+        result.bmiText = result.bmi ? `BMI ${result.bmi} ${result.bmiCategory}` : ''
+      }
+      if (settings.targetWeight) {
+        result.targetDiff = Math.round((stats.latest - settings.targetWeight) * 10) / 10
+      }
+      if (settings.compareDays && sorted.length > 1) {
+        const compareDate = new Date()
+        compareDate.setDate(compareDate.getDate() - settings.compareDays)
+        const compareRecord = sorted.find(r => r.recordTime <= compareDate.getTime())
+        if (compareRecord) {
+          result.compareDiff = Math.round((stats.latest - compareRecord.value) * 10) / 10
+          result.compareDays = settings.compareDays
+        }
+      }
+    }
+
+    return result
   },
 
   onTapCard(e) {
-    const key = e.currentTarget.dataset.key
-    wx.navigateTo({ url: `/pages/health/history/history?type=${key}` })
+    wx.navigateTo({ url: `/pages/health/history/history?type=${e.currentTarget.dataset.key}` })
   },
 
   onTapRecord(e) {
-    const key = e.currentTarget.dataset.key
-    wx.navigateTo({ url: `/pages/health/record/record?type=${key}` })
+    wx.navigateTo({ url: `/pages/health/record/record?type=${e.currentTarget.dataset.key}` })
   },
 
   onTapChart(e) {
-    const key = e.currentTarget.dataset.key
-    wx.navigateTo({ url: `/pages/health/chart/chart?type=${key}` })
+    wx.navigateTo({ url: `/pages/health/chart/chart?type=${e.currentTarget.dataset.key}` })
   },
 
   onTapSettings() {
     wx.navigateTo({ url: '/pages/health/settings/settings' })
   },
 
-  onExport() {
-    const types = this.data.modules.map(m => m.key)
-    const typeNames = { blood_sugar: '血糖', uric_acid: '尿酸', weight: '体重' }
-    let csv = '类型,数值,单位,测量时机,是否服药,记录时间,备注\n'
+  /** 导出全部健康记录为 CSV */
+  async onExport() {
+    wx.showLoading({ title: '整理数据中...' })
+    try {
+      const results = await Promise.all(MODULES.map(m => healthRepo.getRecords(m.key)))
+      wx.hideLoading()
 
-    const promises = types.map(type =>
-      healthDb.getRecords(type).then(records => ({ type, records }))
-    )
-
-    Promise.all(promises).then(results => {
-      results.forEach(({ type, records }) => {
+      let csv = '类型,数值,单位,测量时机,是否服药,记录时间,备注\n'
+      results.forEach((records, idx) => {
+        const module = MODULES[idx]
         records.forEach(r => {
-          const name = typeNames[type] || type
-          const timing = r.timing || ''
           const medicated = r.medicated === true ? '服药' : (r.medicated === false ? '未服药' : '')
           const time = r.recordTime ? new Date(r.recordTime).toLocaleString('zh-CN') : ''
-          const note = (r.note || '').replace(/,/g, '，')
-          csv += `${name},${r.value},${r.unit || ''},${timing},${medicated},${time},${note}\n`
+          csv += [
+            module.name,
+            r.value,
+            r.unit || module.unit,
+            escapeCSV(r.timing),
+            medicated,
+            time,
+            escapeCSV(r.note)
+          ].join(',') + '\n'
         })
       })
 
-      // 直接保存文件并打开
       this.saveAndOpenCSV(csv)
-    })
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: err.message, icon: 'none' })
+    }
   },
 
   saveAndOpenCSV(csvContent) {
     const fs = wx.getFileSystemManager()
-    const fileName = `健康记录导出_${new Date().toISOString().slice(0,10)}.csv`
+    const fileName = `健康记录导出_${new Date().toISOString().slice(0, 10)}.csv`
     const filePath = `${wx.env.USER_DATA_PATH}/${fileName}`
 
     fs.writeFile({
       filePath,
+      // 加 BOM，否则 Excel 打开中文会乱码
       data: '\uFEFF' + csvContent,
       encoding: 'utf8',
       success: () => {
-        // 先尝试打开文件预览
         wx.openDocument({
           filePath,
           fileType: 'csv',
           showMenu: true,
-          success: () => {
-            wx.showToast({ title: '导出成功', icon: 'success' })
-          },
-          fail: () => {
-            // 如果打不开，尝试分享
-            this.shareCSVFile(filePath, fileName)
-          }
+          success: () => wx.showToast({ title: '导出成功', icon: 'success' }),
+          fail: () => this.shareCSVFile(filePath, fileName)
         })
       },
       fail: (err) => {
@@ -163,16 +171,13 @@ Page({
   },
 
   shareCSVFile(filePath, fileName) {
-    // 尝试分享到聊天
     wx.shareFileMessage({
       filePath,
       fileName,
-      success: () => {
-        wx.showToast({ title: '分享成功', icon: 'success' })
-      },
+      success: () => wx.showToast({ title: '分享成功', icon: 'success' }),
       fail: (err) => {
         console.error('分享失败', err)
-        // 最后 fallback：复制到剪贴板
+        // 最后兜底：把内容复制到剪贴板
         wx.getFileSystemManager().readFile({
           filePath,
           encoding: 'utf8',
@@ -182,7 +187,7 @@ Page({
               success: () => {
                 wx.showModal({
                   title: '导出提示',
-                  content: '文件分享失败，CSV内容已复制到剪贴板，您可以粘贴到备忘录或发送给朋友。',
+                  content: '文件分享失败，CSV 内容已复制到剪贴板，您可以粘贴到备忘录或发送给朋友。',
                   showCancel: false
                 })
               }
@@ -193,27 +198,17 @@ Page({
     })
   },
 
-  getStatusText(status) {
-    return { normal: '正常', high: '偏高', low: '偏低' }[status] || ''
-  },
-  getStatusClass(status) {
-    return { normal: 'tag-green', high: 'tag-red', low: 'tag-orange' }[status] || ''
-  },
-
-  // 点击右下角加号：弹出选择菜单
+  /** 右下角加号：弹出类型选择 */
   onTapQuickAdd() {
     wx.showActionSheet({
-      itemList: ['🩸 记录血糖', '💊 记录尿酸', '⚖️ 记录体重'],
+      itemList: MODULES.map(m => `${m.icon} 记录${m.name}`),
       success: (res) => {
-        const types = ['blood_sugar', 'uric_acid', 'weight']
-        const type = types[res.tapIndex]
+        const type = MODULES[res.tapIndex].key
         wx.navigateTo({ url: `/pages/health/record/record?type=${type}` })
       }
     })
   },
 
-  // 阻止事件冒泡
-  onActionTap() {
-    // 什么都不做，只是阻止冒泡
-  }
+  /** 阻止卡片点击冒泡 */
+  onActionTap() {}
 })

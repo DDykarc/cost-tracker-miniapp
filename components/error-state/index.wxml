@@ -1,0 +1,7 @@
+<view class="error-state">
+  <view class="error-icon">
+    <text class="error-icon-text">⚠️</text>
+  </view>
+  <text class="error-title">{{message}}</text>
+  <view class="error-retry" wx:if="{{retryable}}" bindtap="onRetry">重新加载</view>
+</view>

@@ -1,38 +1,7 @@
-const healthDb = require('../../../utils/healthDb')
-
-/**
- * 格式化日期为 YYYY-MM-DD（本地时间）
- */
-function formatDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-/**
- * 格式化时间为 HH:MM（本地时间）
- */
-function formatTime(date) {
-  const h = String(date.getHours()).padStart(2, '0')
-  const m = String(date.getMinutes()).padStart(2, '0')
-  return `${h}:${m}`
-}
-
-/**
- * 获取北京时间（UTC+8）
- * 如果设备时区不是 +8，手动换算
- */
-function getBeijingTime() {
-  const now = new Date()
-  // 获取本地时间与 UTC 的时差（分钟）
-  const localOffset = now.getTimezoneOffset()  // 中国时区返回 -480
-  // 北京时间 = UTC + 8 小时 = UTC - (-480) + 480 - 480 + 480... 
-  // 简单处理：直接构造北京时间字符串
-  // 微信小程序运行在手机上，手机时区一般就是北京时间
-  // 所以直接用 getFullYear/getMonth/getDate 即可
-  return now
-}
+const { HEALTH_TYPE_META, SUGAR_TIMING, HEALTH_TYPES } = require('../../../utils/config')
+const { calcBMI, getBMICategory } = require('../../../utils/calc')
+const { formatDate, formatTime, parseDateTime } = require('../../../utils/format')
+const healthRepo = require('../../../utils/healthRepo')
 
 Page({
   data: {
@@ -42,56 +11,45 @@ Page({
     isEdit: false,
     editId: '',
 
-    // 表单数据
     value: '',
-    recordTime: '',   // "YYYY-MM-DD HH:MM"
     note: '',
     timing: '',
     medicated: null,
     medicine: '',
 
     // 时间选择（原生 picker）
-    dateValue: '',    // "YYYY-MM-DD"  for picker mode="date"
-    timeValue: '',    // "HH:MM"      for picker mode="time"
+    dateValue: '', // "YYYY-MM-DD"
+    timeValue: '', // "HH:mm"
+    today: '',     // 日期选择上限
 
-    // 选项
-    timingOptions: healthDb.SUGAR_TIMING,
-    canSave: false
+    timingOptions: SUGAR_TIMING,
+    canSave: false,
+    saving: false,
+
+    height: null,
+    bmi: null,
+    bmiCategory: ''
   },
 
   onLoad(options) {
     const type = options.type
-    const typeMap = {
-      blood_sugar: { name: '血糖', unit: 'mmol/L' },
-      uric_acid:   { name: '尿酸', unit: 'μmol/L' },
-      weight:      { name: '体重', unit: 'kg' }
-    }
-    const info = typeMap[type] || { name: '', unit: '' }
-
-    // 默认时间为当前北京时间
-    const now = getBeijingTime()
+    const meta = HEALTH_TYPE_META[type] || { name: '', unit: '' }
+    const now = new Date()
     const dateVal = formatDate(now)
     const timeVal = formatTime(now)
-    const todayVal = formatDate(now)  // 用于限制日期选择器
-
-    // 读取设置（用于BMI计算）
-    const settings = healthDb.getSettings()
+    const settings = healthRepo.getSettings()
 
     this.setData({
       type,
-      typeName: info.name,
-      unit: info.unit,
+      typeName: meta.name,
+      unit: meta.unit,
       dateValue: dateVal,
       timeValue: timeVal,
-      today: todayVal,  // 限制日期上限
-      recordTime: `${dateVal} ${timeVal}`,
-      timing: type === 'blood_sugar' ? '空腹' : '',
-      height: settings.height || null,
-      bmi: null,
-      bmiCategory: ''
+      today: dateVal,
+      timing: type === HEALTH_TYPES.BLOOD_SUGAR ? '空腹' : '',
+      height: settings.height || null
     })
 
-    // 如果是编辑模式
     if (options.id) {
       this.setData({ isEdit: true, editId: options.id })
       this.loadRecord(options.id)
@@ -100,62 +58,55 @@ Page({
     this.checkCanSave()
   },
 
-  loadRecord(id) {
-    healthDb.getRecord(id).then(record => {
-      if (!record) return
-
+  async loadRecord(id) {
+    try {
+      const record = await healthRepo.getRecord(id)
+      if (!record) {
+        wx.showToast({ title: '记录不存在', icon: 'none' })
+        return
+      }
       const d = record.recordTime ? new Date(record.recordTime) : new Date()
-      const dateVal = formatDate(d)
-      const timeVal = formatTime(d)
-
       this.setData({
         value: String(record.value),
-        dateValue: dateVal,
-        timeValue: timeVal,
-        recordTime: `${dateVal} ${timeVal}`,
+        dateValue: formatDate(d),
+        timeValue: formatTime(d),
         note: record.note || '',
         timing: record.timing || '',
-        medicated: record.medicated !== undefined ? record.medicated : null,
+        medicated: record.medicated === undefined ? null : record.medicated,
         medicine: record.medicine || ''
       })
       this.checkCanSave()
-    })
+      this.updateBMI()
+    } catch (err) {
+      wx.showToast({ title: err.message, icon: 'none' })
+    }
   },
 
   onInputValue(e) {
-    const value = e.detail.value
-    this.setData({ value })
-    // 体重类型实时计算BMI
-    if (this.data.type === 'weight' && this.data.height) {
-      const numValue = parseFloat(value)
-      if (!isNaN(numValue) && numValue > 0) {
-        const bmi = healthDb.calcBMI(numValue, this.data.height)
-        const category = bmi ? healthDb.getBMICategory(bmi) : ''
-        this.setData({ bmi, bmiCategory: category })
-      } else {
-        this.setData({ bmi: null, bmiCategory: '' })
-      }
-    }
+    this.setData({ value: e.detail.value })
+    this.updateBMI()
     this.checkCanSave()
   },
 
+  /** 体重类型实时计算 BMI */
+  updateBMI() {
+    if (this.data.type !== HEALTH_TYPES.WEIGHT || !this.data.height) return
+    const num = parseFloat(this.data.value)
+    if (isNaN(num) || num <= 0) {
+      this.setData({ bmi: null, bmiCategory: '' })
+      return
+    }
+    const bmi = calcBMI(num, this.data.height)
+    this.setData({ bmi, bmiCategory: getBMICategory(bmi) })
+  },
+
   onDateChange(e) {
-    const dateVal = e.detail.value          // "YYYY-MM-DD"
-    const timeVal = this.data.timeValue || '08:00'
-    this.setData({
-      dateValue: dateVal,
-      recordTime: `${dateVal} ${timeVal}`
-    })
+    this.setData({ dateValue: e.detail.value })
     this.checkCanSave()
   },
 
   onTimeChange(e) {
-    const timeVal = e.detail.value          // "HH:MM"
-    const dateVal = this.data.dateValue
-    this.setData({
-      timeValue: timeVal,
-      recordTime: `${dateVal} ${timeVal}`
-    })
+    this.setData({ timeValue: e.detail.value })
     this.checkCanSave()
   },
 
@@ -168,8 +119,7 @@ Page({
   },
 
   onSelectMedicated(e) {
-    const val = e.currentTarget.dataset.value
-    this.setData({ medicated: val === 'true' })
+    this.setData({ medicated: e.currentTarget.dataset.value === 'true' })
   },
 
   onInputMedicine(e) {
@@ -179,55 +129,55 @@ Page({
   checkCanSave() {
     const { value, dateValue, timeValue } = this.data
     const num = parseFloat(value)
-    const canSave = value !== '' && !isNaN(num) && dateValue && timeValue
-    this.setData({ canSave })
+    this.setData({
+      canSave: value !== '' && !isNaN(num) && num > 0 && !!dateValue && !!timeValue
+    })
   },
 
-  onSave() {
+  async onSave() {
     const { type, value, dateValue, timeValue, note, timing, medicated, medicine, isEdit, editId } = this.data
-    const numValue = parseFloat(value)
+    if (this.data.saving) return
 
-    if (!numValue || isNaN(numValue)) {
-      wx.showToast({ title: '请输入有效数值', icon: 'none' })
+    const numValue = parseFloat(value)
+    if (isNaN(numValue) || numValue <= 0) {
+      wx.showToast({ title: '请输入大于 0 的数值', icon: 'none' })
       return
     }
-
-    // 将 "YYYY-MM-DD HH:MM" 转为时间戳（兼容iOS）
-    const dateTimeStr = `${dateValue} ${timeValue}`
-    const [datePart, timePart] = dateTimeStr.split(' ')
-    const [year, month, day] = datePart.split('-').map(Number)
-    const [hour, minute] = timePart.split(':').map(Number)
-    const timestamp = new Date(year, month - 1, day, hour, minute).getTime()
 
     const record = {
       type,
       value: numValue,
-      recordTime: timestamp,
-      note: note.trim() || undefined,
+      recordTime: parseDateTime(dateValue, timeValue),
+      // 用空字符串而不是 undefined：更新时传 undefined 不会清掉数据库里的旧值，
+      // 用户清空备注后会以为没生效。
+      note: note.trim(),
       unit: this.data.unit
     }
-
-    if (type === 'blood_sugar') {
-      record.timing = this.data.timing || undefined
+    if (type === HEALTH_TYPES.BLOOD_SUGAR) {
+      record.timing = timing
     }
-    if (type === 'uric_acid') {
-      record.medicated = medicated !== null ? medicated : undefined
-      record.medicine = medicine.trim() || undefined
+    if (type === HEALTH_TYPES.URIC_ACID) {
+      record.medicated = medicated
+      record.medicine = medicine.trim()
     }
 
+    this.setData({ saving: true })
     wx.showLoading({ title: '保存中...' })
-
-    const promise = isEdit
-      ? healthDb.updateRecord(editId, record)
-      : healthDb.addRecord(record)
-
-    promise.then(success => {
-      wx.hideLoading()
-      if (success) {
-        wx.showToast({ title: '保存成功', icon: 'success' })
-        setTimeout(() => wx.navigateBack(), 800)
+    try {
+      if (isEdit) {
+        await healthRepo.updateRecord(editId, record)
+      } else {
+        await healthRepo.addRecord(record)
       }
-    })
+      wx.hideLoading()
+      this.setData({ saving: false })
+      wx.showToast({ title: '保存成功', icon: 'success' })
+      setTimeout(() => wx.navigateBack(), 800)
+    } catch (err) {
+      wx.hideLoading()
+      this.setData({ saving: false })
+      wx.showToast({ title: err.message, icon: 'none' })
+    }
   },
 
   onDelete() {
@@ -236,16 +186,17 @@ Page({
       title: '确认删除',
       content: '删除后无法恢复，确定删除这条记录吗？',
       confirmColor: '#FF4444',
-      success: (res) => {
-        if (res.confirm) {
-          wx.showLoading({ title: '删除中...' })
-          healthDb.deleteRecord(this.data.editId).then(success => {
-            wx.hideLoading()
-            if (success) {
-              wx.showToast({ title: '已删除', icon: 'success' })
-              setTimeout(() => wx.navigateBack(), 800)
-            }
-          })
+      success: async (res) => {
+        if (!res.confirm) return
+        wx.showLoading({ title: '删除中...' })
+        try {
+          await healthRepo.deleteRecord(this.data.editId)
+          wx.hideLoading()
+          wx.showToast({ title: '已删除', icon: 'success' })
+          setTimeout(() => wx.navigateBack(), 800)
+        } catch (err) {
+          wx.hideLoading()
+          wx.showToast({ title: err.message, icon: 'none' })
         }
       }
     })

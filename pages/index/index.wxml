@@ -21,14 +21,11 @@
     </view>
   </view>
 
+  <!-- 加载失败 -->
+  <error-state wx:if="{{error}}" message="{{error.message}}" retryable="{{error.retryable}}" bind:retry="loadData" />
+
   <!-- 空状态 -->
-  <view class="empty-state" wx:if="{{items.length === 0}}">
-    <view class="empty-icon">
-      <text class="empty-icon-text">📦</text>
-    </view>
-    <text class="empty-title">还没有物品</text>
-    <text class="empty-desc">点击下方 + 按钮，添加你的第一件物品</text>
-  </view>
+  <empty-state wx:if="{{!loading && !error && items.length === 0}}" icon="📦" title="还没有物品" desc="点击下方 + 按钮，添加你的第一件物品" />
 
   <!-- 分类筛选栏 -->
   <scroll-view class="category-bar" scroll-x enhanced show-scrollbar="{{false}}" wx:if="{{items.length > 0}}">
@@ -111,9 +108,7 @@
   </scroll-view>
 
   <!-- 筛选后无数据 -->
-  <view class="empty-state" wx:if="{{items.length > 0 && filteredItems.length === 0}}">
-    <text class="empty-desc">该分类下还没有物品</text>
-  </view>
+  <empty-state wx:if="{{items.length > 0 && filteredItems.length === 0}}" icon="" title="该分类下还没有物品" compact />
 
   <!-- 添加按钮 -->
   <view class="fab" bindtap="onAddItem">
