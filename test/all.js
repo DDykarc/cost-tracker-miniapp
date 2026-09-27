@@ -52,6 +52,7 @@ else failed++
 run('业务计算', ['test/calc.test.js'])
 run('格式化', ['test/format.test.js'])
 run('图表坐标', ['test/chart.test.js'])
+run('分页拉取', ['test/cloud.test.js'])
 run('WXML / 配置结构', ['test/wxml-lint.js'])
 
 console.log('\n' + '='.repeat(50))
