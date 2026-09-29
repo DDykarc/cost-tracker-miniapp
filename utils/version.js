@@ -4,8 +4,15 @@
  * version: 从云数据库 version_info 集合读取，此处为兜底值
  */
 module.exports = {
-  version: '1.3.0',
+  version: '1.3.1',
   changelog: [
+    {
+      version: '1.3.1',
+      date: '2026-09-29',
+      changes: [
+        '修复个别机型模拟器下样式文件编译失败导致白屏的问题',
+      ]
+    },
     {
       version: '1.3.0',
       date: '2026-09-28',

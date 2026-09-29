@@ -1,4 +1,4 @@
-﻿/* 首页样式 */
+/* 首页样式 */
 .page {
   min-height: 100vh;
   padding-bottom: 140rpx;
